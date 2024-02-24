@@ -9,7 +9,9 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
-
+import { useDispatch } from 'react-redux'
+import { signInFailure, signInStart, signInSuccess } from '../redux/user/userSlice'
+//import useSelector from 'react-redux'
 interface FormValues {
   email: string;
   password: string;
@@ -17,8 +19,9 @@ interface FormValues {
 
 const SignIn: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
-
+  const dispatch = useDispatch()
   const toggleVisibility = () => setIsVisible(!isVisible);
+  //const { loading, error } = useSelector((state: { user: any; }) => state.user)
 
   const initialValues: FormValues = {
     email: '',
@@ -44,13 +47,16 @@ const SignIn: React.FC = () => {
 
   const handleSubmit = async (values: FormValues, { setSubmitting }: { setSubmitting: (isSubmitting: boolean) => void }) => {
     try {
+      dispatch(signInStart())
       const response = await axios.post('/api/auth/signin', values);
       console.log(response.data);
       setSubmitting(false)
+      dispatch(signInSuccess(response.data))
       navigate('/'); // Assuming after successful sign-in, user will be redirected to the dashboard
     } catch (error) {
       console.error('Error submitting form:', error);
       // Display a toast notification
+      dispatch(signInFailure(error))
       toast.error('An error occurred. Please try again later.', {
         //position: toast.POSITION.TOP_CENTER,
         autoClose: 3000 // Set the duration for which the toast will be displayed
