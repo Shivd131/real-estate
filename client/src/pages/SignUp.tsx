@@ -9,6 +9,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
+import OAuth from '../components/OAuth';
 
 interface FormValues {
   username: string;
@@ -110,6 +111,7 @@ const SignUp: React.FC = () => {
             <Button color="success" type="submit" className='text-white font-bold text-lg mt-5' disabled={isSubmitting} isLoading={isSubmitting}>
               {isSubmitting ? 'Submitting...' : 'SIGN UP'}
             </Button>
+            <OAuth />
           </Form>
         )}
       </Formik>

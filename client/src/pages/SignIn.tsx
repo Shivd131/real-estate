@@ -11,6 +11,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux'
 import { signInFailure, signInStart, signInSuccess } from '../redux/user/userSlice'
+import OAuth from '../components/OAuth';
 //import useSelector from 'react-redux'
 interface FormValues {
   email: string;
@@ -104,6 +105,7 @@ const SignIn: React.FC = () => {
             <Button color="success" type="submit" className='text-white font-bold text-lg mt-5' disabled={isSubmitting} isLoading={isSubmitting}>
               {isSubmitting ? 'Logging in...' : 'SIGN IN'}
             </Button>
+            <OAuth/>
           </Form>
         )}
       </Formik>
