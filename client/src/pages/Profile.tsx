@@ -1,46 +1,59 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from "@nextui-org/react";
 import { EyeFilledIcon } from "../assets/EyeFilledIcon";
 import { EyeSlashFilledIcon } from "../assets/EyeSlashFilledIcon";
 import { Button } from "@nextui-org/react";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import axios from 'axios';
-import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import { useRef } from 'react';
 import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/storage';
 import { app } from '../firebase';
-
+import { updateUserFailure, updateUserStart, updateUserSuccess } from '../redux/user/userSlice';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 
 interface FormValues {
+  avatar: string;
   username: string;
   email: string;
   password: string;
+  [key: string]: string;
 }
-interface FormDataWithAvatar extends FormValues {
-  avatar?: string;
-}
-
 interface User {
   currentUser: {
-    name: string;
+    _id: any;
+    username: string;
     email: string;
     avatar: string;
   } | null;
 }
 
 const Profile: React.FC = () => {
-
   const [isVisible, setIsVisible] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [filePerc, setFilePerc] = useState(0);
   const [fileUploadError, setFileUploadError] = useState(false);
-  const [formData, setFormData] = useState<FormDataWithAvatar>({ avatar: '', username: '', email: '', password: '' });
-  console.log("formdata is ", formData)
+  const [updateSuccess, setUpdateSuccess] = useState(false);
+  const userDetails = useSelector((state: RootState) => {
+    return state.user as unknown as User;
+  });
+  const [formData, setFormData] = useState<FormValues>({
+    avatar: userDetails.currentUser?.avatar || '',
+    username: userDetails.currentUser?.username || '', // Set username directly
+    email: userDetails.currentUser?.email || '',
+    password: ''
+  });
+  const dispatch = useDispatch();
+
+
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (file) {
@@ -48,88 +61,99 @@ const Profile: React.FC = () => {
     }
   }, [file]);
 
-  const fileRef = useRef<HTMLInputElement>(null);
-  const userDetails = useSelector((state: RootState) => {
-    return state.user as unknown as User;
-  });
+  useEffect(() => {
+    console.log("formdata is ", formData)
+  }, [formData])
+
+
   const toggleVisibility = () => setIsVisible(!isVisible);
-  const navigate = useNavigate()
 
   const initialValues: FormValues = {
-    username: '',
-    email: '',
-    password: ''
+    username: userDetails.currentUser?.username || '',
+    email: userDetails.currentUser?.email || '',
+    password: '',
+    avatar: userDetails.currentUser?.avatar || ''
   };
 
   const validate = (values: FormValues) => {
     const errors: Partial<FormValues> = {};
-    if (!values.username) {
-      errors.username = 'Required';
-    }
-    if (!values.email) {
-      errors.email = 'Required';
-    } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(values.email)) {
-      errors.email = 'Invalid email address';
-    }
-    if (!values.password) {
-      errors.password = 'Required';
-    } else if (values.password.length < 6) {
-      errors.password = 'Password must be at least 6 characters long';
-    }
     return errors;
   };
 
-  const handleSubmit = async (values: FormValues, { setSubmitting }: { setSubmitting: (isSubmitting: boolean) => void }) => {
+
+  const handleSubmit = async (values: FormValues) => {
     try {
-      // You can handle profile update logic here
-      console.log("Profile updated:", values);
-      setSubmitting(false)
-      // Show success message
-      toast.success('Profile updated successfully', {
-        autoClose: 3000 // Set the duration for which the toast will be displayed
+      dispatch(updateUserStart());
+  
+      const changedFields: Partial<FormValues> = {};
+  
+      Object.keys(values).forEach((key) => {
+        if (values[key] !== initialValues[key]) {
+          changedFields[key as keyof FormValues] = values[key];
+        }
       });
+  
+      const res = await axios.post(`/api/user/update/${userDetails!.currentUser!._id}`, changedFields);
+      const data = res.data;
+      toast.success("updated")
+      if (data.success === false) {
+        dispatch(updateUserFailure(data.message));
+        return;
+      }
+      dispatch(updateUserSuccess(data));
+  
+      // Update formData with the new values
+      setFormData({ ...formData, ...changedFields });
+  
+      setUpdateSuccess(true);
     } catch (error) {
-      console.error('Error updating profile:', error);
-      // Display a toast notification
-      toast.error('An error occurred while updating profile. Please try again later.', {
-        autoClose: 3000 // Set the duration for which the toast will be displayed
-      });
-      setSubmitting(false);
+      dispatch(updateUserFailure((error as Error).message));
     }
   };
+  
 
-  const handleFileUpload = (file: Blob | ArrayBuffer) => {
+
+  const handleFileUpload = (file: File) => {
     const storage = getStorage(app);
-    const fileName = new Date().getTime() + (file instanceof File ? file.name : 'unknown');
+    const fileName = new Date().getTime() + file.name;
     const storageRef = ref(storage, fileName);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
       'state_changed',
       (snapshot) => {
-        const progress =
-          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
         setFilePerc(Math.round(progress));
-        console.log(progress)
       },
       (error) => {
         setFileUploadError(true);
-        console.log(error)
       },
       () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) =>
-          setFormData({ ...formData, avatar: downloadURL })
-        );
+        getDownloadURL(uploadTask.snapshot.ref)
+          .then((downloadURL) => {
+            setFileUploadError(false);
+            setUpdateSuccess(false);
+            setFilePerc(0);
+            setFile(null);
+            setFormData({ ...initialValues, avatar: downloadURL });
+          })
+          .catch((error) => {
+            console.error('Error getting download URL:', error);
+            setFileUploadError(true);
+          });
       }
     );
   };
 
+
+
   return (
+    
     <div className='p-3 max-w-lg mx-auto'>
       <h1 className='text-3xl text-center font-semibold my-7'>Profile</h1>
-
+      <ToastContainer />
       <Formik
-        initialValues={initialValues}
+        initialValues={formData}
         validate={validate}
         onSubmit={handleSubmit}
       >
@@ -140,11 +164,12 @@ const Profile: React.FC = () => {
               ref={fileRef}
               hidden
               accept='image/*'
-              onChange={e => e?.target?.files && setFile(e.target.files[0])} />
+              onChange={e => e?.target?.files && setFile(e.target.files[0])}
+            />
             <img
-              src={formData?.avatar || userDetails.currentUser?.avatar }
+              src={formData.avatar || userDetails.currentUser?.avatar}
               alt='profile'
-              className='rounded-full h-32 w-32 object-cover self-center'
+              className='rounded-full h-32 w-32 object-cover self-center cursor-pointer'
               onClick={() => fileRef?.current?.click()}
             />
             <p className='text-sm self-center'>
@@ -201,9 +226,9 @@ const Profile: React.FC = () => {
               Create Listing
             </Button>
           </Form>
-
         )}
       </Formik>
+
       <div className='flex justify-between mt-3'>
         <span className='text-red-700 cursor-pointer'>
           Delete Account
@@ -211,7 +236,6 @@ const Profile: React.FC = () => {
         <span className='text-red-700 cursor-pointer'>
           Sign Out
         </span>
-
       </div>
     </div>
   );
