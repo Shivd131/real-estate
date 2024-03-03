@@ -12,9 +12,19 @@ import { RootState } from '../redux/store';
 import { useRef } from 'react';
 import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/storage';
 import { app } from '../firebase';
-import { updateUserFailure, updateUserStart, updateUserSuccess } from '../redux/user/userSlice';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import {
+  updateUserStart,
+  updateUserSuccess,
+  updateUserFailure,
+  deleteUserFailure,
+  deleteUserStart,
+  deleteUserSuccess,
+  signOutUserStart,
+  signOutUserFailure,
+  signOutUserSuccess,
+} from '../redux/user/userSlice';
 
 
 interface FormValues {
@@ -84,15 +94,15 @@ const Profile: React.FC = () => {
   const handleSubmit = async (values: FormValues) => {
     try {
       dispatch(updateUserStart());
-  
+
       const changedFields: Partial<FormValues> = {};
-  
+
       Object.keys(values).forEach((key) => {
         if (values[key] !== initialValues[key]) {
           changedFields[key as keyof FormValues] = values[key];
         }
       });
-  
+
       const res = await axios.post(`/api/user/update/${userDetails!.currentUser!._id}`, changedFields);
       const data = res.data;
       toast.success("updated")
@@ -101,16 +111,16 @@ const Profile: React.FC = () => {
         return;
       }
       dispatch(updateUserSuccess(data));
-  
+
       // Update formData with the new values
       setFormData({ ...formData, ...changedFields });
-  
+
       setUpdateSuccess(true);
     } catch (error) {
       dispatch(updateUserFailure((error as Error).message));
     }
   };
-  
+
 
 
   const handleFileUpload = (file: File) => {
@@ -145,10 +155,40 @@ const Profile: React.FC = () => {
     );
   };
 
+  const handleDeleteUser = async () => {
+    try {
+      dispatch(deleteUserStart());
+      const res = await axios.delete(`/api/user/delete/${userDetails.currentUser!._id}`)
+      const data = res.data;
+      if (data.success === false) {
+        dispatch(deleteUserFailure(data.message));
+        return;
+      }
+      dispatch(deleteUserSuccess(data));
+    } catch (error) {
+      dispatch(deleteUserFailure((error as Error).message));
+    }
+  }
 
+  const handleSignOut = async () => {
+    try {
+      dispatch(signOutUserStart())
+      const res = await axios.get(`/api/auth/signout`)
+      const data = res.data;
+      if (data.success === false) {
+        dispatch(signOutUserFailure(data.message))
+        return;
+      }
+
+      dispatch(signOutUserSuccess(data))
+
+    } catch (error) {
+      dispatch(signOutUserFailure(error))
+    }
+  }
 
   return (
-    
+
     <div className='p-3 max-w-lg mx-auto'>
       <h1 className='text-3xl text-center font-semibold my-7'>Profile</h1>
       <ToastContainer />
@@ -230,10 +270,10 @@ const Profile: React.FC = () => {
       </Formik>
 
       <div className='flex justify-between mt-3'>
-        <span className='text-red-700 cursor-pointer'>
+        <span onClick={handleDeleteUser} className='text-red-700 cursor-pointer'>
           Delete Account
         </span>
-        <span className='text-red-700 cursor-pointer'>
+        <span onClick={handleSignOut} className='text-red-700 cursor-pointer'>
           Sign Out
         </span>
       </div>
