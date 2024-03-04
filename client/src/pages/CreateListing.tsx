@@ -1,5 +1,5 @@
 import { Formik, Form, Field, ErrorMessage } from 'formik';
-import { Button, Input, Checkbox, Textarea } from '@nextui-org/react';
+import { Button, Input, Checkbox, Textarea, RadioGroup, Radio, radio } from '@nextui-org/react';
 import * as Yup from 'yup';
 import { Key, SetStateAction, useState } from 'react';
 import {
@@ -10,15 +10,31 @@ import {
 } from 'firebase/storage';
 import { app } from '../firebase';
 import { Image } from "@nextui-org/react";
+import axios from 'axios';
+import { useSelector } from 'react-redux';
+import { RootState } from '../redux/store';
+import { ToastContainer, toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
+interface User {
+    currentUser: {
+        _id: any;
+        username: string;
+        email: string;
+        avatar: string;
+    } | null;
+}
 
 
 function CreateListing() {
     const [files, setFiles] = useState<File[]>([]);
     const [imageUploadError, setImageUploadError] = useState(false);
     const [uploading, setUploading] = useState(false);
-    const [error, setError] = useState(false);
+    const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    console.log(files)
+    const userDetails = useSelector((state: RootState) => {
+        return state.user as unknown as User;
+    });
+    const navigate = useNavigate();
 
     const storeImage = async (file: any) => {
         return new Promise((resolve, reject) => {
@@ -72,6 +88,7 @@ function CreateListing() {
     };
     return (
         <main className='p-3 max-w-4xl mx-auto'>
+            <ToastContainer />
             <h1 className='text-3xl font-semibold text-center my-7'>
                 Create a Listing
             </h1>
@@ -80,17 +97,17 @@ function CreateListing() {
                     name: '',
                     description: '',
                     address: '',
-                    sale: false,
-                    rent: false,
+                    type: 'rent',
                     parking: false,
                     furnished: false,
                     offer: false,
-                    bedrooms: '',
-                    bathrooms: '',
-                    regularPrice: '',
-                    discountPrice: '',
+                    bedrooms: 1,
+                    bathrooms: 1,
+                    regularPrice: 0,
+                    discountPrice: 0,
                     images: [],
                 }}
+
                 validationSchema={Yup.object({
                     name: Yup.string()
                         .min(10, 'Must be at least 10 characters')
@@ -101,19 +118,42 @@ function CreateListing() {
                     bedrooms: Yup.number().min(1, 'Must be at least 1').required('Required'),
                     bathrooms: Yup.number().min(1, 'Must be at least 1').required('Required'),
                     regularPrice: Yup.number().min(50, 'Minimum $50').required('Required'),
-                    discountPrice: Yup.number().when('offer', {
-                        is: true,
-                        then: Yup.number().min(0, 'Minimum $0').required('Required'),
-                        otherwise: Yup.number(),
-                    }),
+                    // discountPrice: Yup.number().when('offer', {
+                    //     is: true,
+                    //     then: Yup.number().min(0, 'Minimum $0').required('Required'),
+                    //     otherwise: Yup.number(),
+                    // }),
                 })}
                 onSubmit={(values, { setSubmitting }) => {
-                    // Handle form submission
-                    console.log(values);
-                    setSubmitting(false);
+                    // Modify values object to include userRef
+                    const updatedValues = {
+                        ...values,
+                        userRef: userDetails.currentUser!._id
+                    };
+
+                    setLoading(true);
+                    axios.post('/api/listing/create', updatedValues)
+                        .then(response => {
+                            const data = response.data;
+                            setLoading(false);
+                            if (data.success === false) {
+                                setError(data.message);
+                            }
+                            toast.success("Listing created successfully")
+                            navigate(`/listing/${data._id}`)
+                        })
+                        .catch(error => {
+                            setError(error.response.data.message || error.message);
+                        })
+                        .finally(() => {
+                            setLoading(false);
+                            setSubmitting(false); // If you need to handle form submission status
+                        });
                 }}
+
+
             >
-                {({ isSubmitting, isValid, dirty, setFieldValue, values }) => (
+                {({ isSubmitting, isValid, dirty, setFieldValue, values, initialValues }) => (
                     <Form className='flex flex-col sm:flex-row gap-4'>
                         <div className='flex flex-col gap-4 flex-1'>
                             <Field
@@ -145,58 +185,93 @@ function CreateListing() {
                             />
                             <ErrorMessage name='address' component="div" className='text-red-500 text-sm pr-2 -top-10' />
 
-                            <div className='flex gap-6 flex-wrap'>
-                                <div className='flex gap-6 items-center'>
+                            <div className='flex gap-6 flex-wrap flex-col'>
+                                <RadioGroup className='' orientation="horizontal"
+                                >
+                                    <Radio
+                                        id='sale'
+                                        className=''
+                                        value='sale'
+                                        defaultChecked={initialValues.type === 'sale'}
+                                        onChange={() => values.type = 'sell   '}
+                                    >
+                                        Sell
+                                    </Radio>
+                                    <Radio
+                                        id='rent'
+                                        className=''
+                                        value='rent'
+                                        defaultChecked={initialValues.type === 'rent'}
+                                        onChange={() => values.type = 'rent'}
+                                    >
+                                        Rent
+                                    </Radio>
+                                </RadioGroup>
+
+                                {/* <div className='flex gap-6 items-center'>
                                     <Field
-                                        type='checkbox'
+                                        type='radio'
                                         id='sale'
                                         className='w-5'
-                                        name='sale'
+                                        name='type'
                                         as={Checkbox}
+                                        value='sale'
+                                        defaultSelected={initialValues.type === 'sale'}
+                                        onChange={() => setFieldValue('type', 'sale')}
+
                                     />
                                     <span>Sell</span>
                                 </div>
                                 <div className='flex gap-6 items-center'>
                                     <Field
-                                        type='checkbox'
+                                        type='radio'
                                         id='rent'
                                         className='w-5'
-                                        name='rent'
+                                        name='type'
                                         as={Checkbox}
+                                        value='rent'
+                                        defaultSelected={initialValues.type === 'rent'}
+                                        onChange={() => setFieldValue('type', 'sale')}
                                     />
                                     <span>Rent</span>
+                                </div> */}
+                                <div className='flex gap-6'>
+                                    <div className='flex gap-6 items-center'>
+                                        <Field
+                                            type='checkbox'
+                                            id='parkingspot'
+                                            className='w-5'
+                                            name='parkingspot'
+                                            as={Checkbox}
+                                            defaultSelected={initialValues.parking}
+                                        />
+                                        <span>Parking Spot</span>
+                                    </div>
+                                    <div className='flex gap-6 items-center'>
+                                        <Field
+                                            type='checkbox'
+                                            id='furnished'
+                                            className='w-5'
+                                            name='furnished'
+                                            as={Checkbox}
+                                            defaultSelected={initialValues.furnished}
+                                        />
+                                        <span>Furnished</span>
+                                    </div>
+                                    <div className='flex gap-6 items-center'>
+                                        <Field
+                                            type='checkbox'
+                                            id='offer'
+                                            className='w-5'
+                                            name='offer'
+                                            as={Checkbox}
+                                            defaultSelected={initialValues.offer}
+                                        />
+                                        <span>Offer</span>
+                                    </div>
+
                                 </div>
-                                <div className='flex gap-6 items-center'>
-                                    <Field
-                                        type='checkbox'
-                                        id='parkingspot'
-                                        className='w-5'
-                                        name='parkingspot'
-                                        as={Checkbox}
-                                    />
-                                    <span>Parking Spot</span>
-                                </div>
-                                <div className='flex gap-6 items-center'>
-                                    <Field
-                                        type='checkbox'
-                                        id='furnished'
-                                        className='w-5'
-                                        name='furnished'
-                                        as={Checkbox}
-                                    />
-                                    <span>Furnished</span>
-                                </div>
-                                <div className='flex gap-6 items-center'>
-                                    <Field
-                                        type='checkbox'
-                                        id='offer'
-                                        className='w-5'
-                                        name='offer'
-                                        as={Checkbox}
-                                    />
-                                    <span>Offer</span>
-                                </div>
-                                {/* Similar checkbox fields for rent, parking, furnished, and offer */}
+
                             </div>
                             <div className='flex  gap-6 flex-wrap'>
                                 <div className='flex items-center gap-6'>
