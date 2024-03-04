@@ -1,9 +1,75 @@
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import { Button, Input, Checkbox, Textarea } from '@nextui-org/react';
 import * as Yup from 'yup';
-import { Key } from 'react';
+import { Key, SetStateAction, useState } from 'react';
+import {
+    getDownloadURL,
+    getStorage,
+    ref,
+    uploadBytesResumable,
+} from 'firebase/storage';
+import { app } from '../firebase';
+import { Image } from "@nextui-org/react";
+
 
 function CreateListing() {
+    const [files, setFiles] = useState<File[]>([]);
+    const [imageUploadError, setImageUploadError] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState(false);
+    const [loading, setLoading] = useState(false);
+    console.log(files)
+
+    const storeImage = async (file: any) => {
+        return new Promise((resolve, reject) => {
+            const storage = getStorage(app);
+            const fileName = new Date().getTime() + file.name;
+            console.log(fileName)
+            const storageRef = ref(storage, fileName);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+            uploadTask.on(
+                'state_changed',
+                (snapshot) => {
+                    const progress =
+                        (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    console.log(`Upload is ${progress}% done`);
+                },
+                (error) => {
+                    reject(error);
+                },
+                () => {
+                    getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                        resolve(downloadURL);
+                    });
+                }
+            );
+        });
+    };
+
+    const handleImageSubmit = (files: string | any[], setFieldValue: (arg0: string, arg1: any[]) => void) => {
+        if (files.length > 0 && files.length < 7) {
+            setUploading(true);
+            setImageUploadError(false);
+            const promises = [];
+
+            for (let i = 0; i < files.length; i++) {
+                promises.push(storeImage(files[i]));
+            }
+            Promise.all(promises)
+                .then((urls) => {
+                    setFieldValue('images', urls);
+                    setImageUploadError(false);
+                    setUploading(false);
+                })
+                .catch((err) => {
+                    setImageUploadError(true);
+                    setUploading(false);
+                });
+        } else {
+            setImageUploadError(true);
+            setUploading(false);
+        }
+    };
     return (
         <main className='p-3 max-w-4xl mx-auto'>
             <h1 className='text-3xl font-semibold text-center my-7'>
@@ -47,7 +113,7 @@ function CreateListing() {
                     setSubmitting(false);
                 }}
             >
-                {({ isSubmitting, isValid, dirty, setFieldValue }) => (
+                {({ isSubmitting, isValid, dirty, setFieldValue, values }) => (
                     <Form className='flex flex-col sm:flex-row gap-4'>
                         <div className='flex flex-col gap-4 flex-1'>
                             <Field
@@ -201,34 +267,58 @@ function CreateListing() {
                                     The first image will be the cover (max 6)
                                 </span>
                             </p>
-                            <Field
-                                onChange={(files: any) => setFieldValue('images', files)}
-                                className='p-3 border border-gray-300 rounded w-full'
-                                type='file'
-                                id='images'
-                                name='images'
-                                // as={Upload}
-                                accept='image/*'
-                                multiple
-                            />
+
+                            <div className='flex gap-4'>
+
+                                <input
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        if (e.target.files) {
+                                            setFiles(Array.from(e.target.files));
+                                        }
+                                    }}
+                                    className='p-3 border border-gray-300 rounded w-full'
+                                    type='file'
+                                    id='images'
+                                    name='images'
+                                    accept='image/*'
+                                    multiple
+                                />
+
+                                <Button
+                                    type='button'
+                                    isLoading={uploading}
+                                    onClick={() => handleImageSubmit(files, setFieldValue)}
+                                    className='p-3 text-green-700 border border-green-700 rounded uppercase hover:shadow-lg disabled:opacity-80 self-stretch relative h-[100%] w-[35%] bg-white'
+                                >
+                                    {'Upload'}
+                                </Button>
+
+                            </div>
                             <ErrorMessage name='images' component="div" className='text-red-500 text-sm pr-2 -top-10' />
 
-                            {/* {values.images.map((file: Blob | MediaSource, index: Key | null | undefined) => (
-                                <div key={index} className='flex justify-between p-3 border items-center'>
-                                    <img
-                                        src={URL.createObjectURL(file)}
-                                        alt={`Listing image ${index + 1}`}
-                                        className='w-20 h-20 object-contain rounded-lg'
-                                    />
-                                    <button
-                                        type='button'
-                                        onClick={() => setFieldValue('images', values.images.filter((_, i) => i !== index))}
-                                        className='p-3 text-red-700 rounded-lg uppercase hover:opacity-75'
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
-                            ))} */}
+                            <div className='flex gap-4 flex-wrap relative'>
+                                {values.images.map((url: string, index: number) => (
+                                    <div key={index} className='relative'>
+                                        <Image
+                                            isZoomed
+                                            width={200}
+                                            src={url}
+                                            alt={`Listing image ${index + 1}`}
+                                        />
+                                        <button
+                                            type='button'
+                                            onClick={() => {
+                                                const updatedImages = [...values.images];
+                                                updatedImages.splice(index, 1);
+                                                setFieldValue('images', updatedImages);
+                                            }}
+                                            className='absolute top-0 right-0 p-1 z-10 w-6 text-gray-800 rounded-full  font-bold'
+                                        >
+                                            X
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
 
                             <Button
                                 disabled={isSubmitting || !isValid || !dirty}
