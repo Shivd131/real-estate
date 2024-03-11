@@ -49,10 +49,19 @@ export const deleteUser = async (req, res, next) => {
 };
 
 export const getUserListings = async (req, res, next) => {
+  const page = parseInt(req.query.page) || 1; // Parse page from query parameters or default to 1
+  const perPage = 5; // Number of listings per page
+
   if (req.user.id === req.params.id) {
     try {
-      const listings = await Listing.find({ userRef: req.params.id });
-      res.status(200).json(listings);
+      const totalListings = await Listing.countDocuments({ userRef: req.params.id });
+      const totalPages = Math.ceil(totalListings / perPage);
+
+      const listings = await Listing.find({ userRef: req.params.id })
+        .skip((page - 1) * perPage) // Skip documents based on the current page
+        .limit(perPage); // Limit documents per page
+
+      res.status(200).json({ listings, totalPages });
     } catch (error) {
       next(error);
     }
@@ -60,3 +69,4 @@ export const getUserListings = async (req, res, next) => {
     return next(errorHandler(401, 'You can only view your own listings!'));
   }
 };
+

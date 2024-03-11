@@ -15,6 +15,8 @@ import { app } from '../firebase';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Card, CardBody, CardFooter, Image } from "@nextui-org/react";
+import { Pagination } from "@nextui-org/react";
+
 
 import {
   updateUserStart,
@@ -46,6 +48,10 @@ interface User {
 }
 
 interface Listing {
+  _id: string;
+}
+
+interface Listing {
   address: string;
   bathrooms: number;
   bedrooms: number;
@@ -67,6 +73,11 @@ const Profile: React.FC = () => {
   const [filePerc, setFilePerc] = useState(0);
   const [fileUploadError, setFileUploadError] = useState(false);
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
   const userDetails = useSelector((state: RootState) => {
     return state.user as unknown as User;
   });
@@ -77,7 +88,7 @@ const Profile: React.FC = () => {
     password: ''
   });
   const [showListingsError, setShowListingsError] = useState('')
-  const [userListings, setUserListings] = useState([])
+  const [userListings, setUserListings] = useState<Listing[]>([]);
   const dispatch = useDispatch();
 
 
@@ -221,9 +232,44 @@ const Profile: React.FC = () => {
     }
   }
 
-  function handleListingDelete(_id: any): void {
-    throw new Error('Function not implemented.');
-  }
+  const handleListingDelete = async (listingId: string) => {
+    try {
+      const response = await axios.delete(`/api/listing/delete/${listingId}`);
+      const data = response.data;
+      if (data.success === false) {
+        toast.error(data.message);
+        return;
+      }
+      setUserListings((prevListings) =>
+        prevListings.filter((listing) => listing._id !== listingId)
+      );
+      toast.success('Listing deleted successfully');
+    } catch (error) {
+      console.error('Error deleting listing:', (error as Error).message);
+      toast.error('Error deleting listing');
+    }
+  };
+
+  const fetchUserListings = async () => {
+    try {
+      const res = await axios.get(`/api/user/listings/${userDetails.currentUser?._id}`, {
+        params: { page: currentPage }
+      });
+      const data = res.data;
+      if (data.success === false) {
+        setShowListingsError('error fetching data');
+        return;
+      }
+      setUserListings(data.listings);
+      setTotalPages(data.totalPages);
+    } catch (error) {
+      setShowListingsError((error as Error).message);
+      toast.error('Error displaying listings');
+    }
+  };
+  useEffect(() => {
+    fetchUserListings();
+  }, [currentPage]);
 
   return (
     <div className='p-3 max-w-lg mx-auto'>
@@ -333,7 +379,7 @@ const Profile: React.FC = () => {
                     <img
                       src={listing.imageUrls[0]}
                       alt='listing cover'
-                      className='h-16 w-16 object-contain'
+                      className='h-20 w-20 object-contain'
                     />
                   </Link>
                   <Link
@@ -358,7 +404,14 @@ const Profile: React.FC = () => {
               ))}
             </div>
           )}
+          <Pagination
+            showControls
+            total={totalPages}
+            initialPage={currentPage}
+            onChange={handlePageChange}
+          />
         </div>
+
       </div>
     </div>
   );
