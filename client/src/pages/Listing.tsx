@@ -73,10 +73,10 @@ function Listing() {
             {loading && <Spinner className='scale-150' size="lg" />}
             {error && <p className='text-3xl'>Something went Wrong!</p>}
             {listing && !loading && !error && (
-                <Swiper className='self-start' navigation>
+                <Swiper className='self-start m-5 rounded-xl' navigation>
                     {listing.imageUrls.map(url => (
                         <SwiperSlide key={url}>
-                            <div className='h-[550px] w-[100vw]' style={{ background: `url(${url}) center/cover no-repeat`  }}></div>
+                            <div className='h-[550px] w-[100vw] ' style={{ background: `url(${url}) center/cover no-repeat`  }}></div>
                         </SwiperSlide>
                     ))}
                 </Swiper>
